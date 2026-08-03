@@ -112,7 +112,13 @@ jobs:
           IMAGE: ${{ env.IMAGE_NAME }}:${{ needs.prep.outputs.short_sha }}
         run: |
           echo "Deploying image: ${IMAGE}"
-          # Both containers run the same image (staging + dev APM reporting).
-          kubectl set image deployment/cicd-dora-github-test-website \
-            website-staging="${IMAGE}" website-dev="${IMAGE}" -n "${K8S_NAMESPACE}"
-          kubectl rollout status deployment/cicd-dora-github-test-website -n "${K8S_NAMESPACE}" --timeout=180s
+          # Update both website containers (staging + dev APM reporting) across
+          # all three workloads that run this image.
+          for kind_name in \
+            deployment/cicd-dora-github-test-website \
+            statefulset/cicd-dora-github-test-website-sts \
+            daemonset/cicd-dora-github-test-website-ds; do
+            kubectl set image "${kind_name}" \
+              website-staging="${IMAGE}" website-dev="${IMAGE}" -n "${K8S_NAMESPACE}"
+            kubectl rollout status "${kind_name}" -n "${K8S_NAMESPACE}" --timeout=180s
+          done
