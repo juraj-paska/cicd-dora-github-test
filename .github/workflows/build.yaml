@@ -175,28 +175,24 @@ jobs:
                 app=cicd-dora-github-test-website env=dev \
             | kubectl apply -f -
 
-      - name: Apply manifest
-        run: |
-          kubectl apply -f k8s/
-
-      - name: Update image to commit tag
+      - name: Apply manifest (image tag = commit SHA)
         env:
-          # Images are only ever tagged with the short SHA, so deploy the tag
-          # for this commit. On a deploy-only run (build skipped) this assumes
-          # the image for this commit was built by an earlier run.
-          IMAGE: ${{ env.IMAGE_NAME }}:${{ needs.prep.outputs.short_sha }}
+          # Manifests pin IMAGE_TAG_PLACEHOLDER; substitute this commit's SHA tag
+          # at apply time so the workloads run the image built for this commit.
+          # On a deploy-only run (build skipped) this assumes the image for this
+          # commit was built by an earlier run.
+          IMAGE_TAG: ${{ needs.prep.outputs.short_sha }}
         run: |
-          echo "Deploying image: ${IMAGE}"
-          # Update both website containers (staging + dev APM reporting) across
-          # all three workloads that run this image.
-          for kind_name in \
-            deployment/cicd-dora-github-test-website \
-            statefulset/cicd-dora-github-test-website-sts \
-            daemonset/cicd-dora-github-test-website-ds; do
-            kubectl set image "${kind_name}" \
-              website-staging="${IMAGE}" website-dev="${IMAGE}" -n "${K8S_NAMESPACE}"
+          echo "Deploying image tag: ${IMAGE_TAG}"
+          # Render the placeholder to the real tag, then apply the rendered dir.
+          mkdir -p rendered
+          for f in k8s/*.yaml; do
+            sed "s/IMAGE_TAG_PLACEHOLDER/${IMAGE_TAG}/g" "$f" > "rendered/$(basename "$f")"
           done
+          kubectl apply -f rendered/
 
+      - name: Wait for rollout
+        run: |
           # Gate the deploy on the Deployment and StatefulSet rolling out.
           for kind_name in \
             deployment/cicd-dora-github-test-website \

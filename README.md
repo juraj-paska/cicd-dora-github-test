@@ -58,9 +58,20 @@ K8s Secrets, one per collector. **Token material is never committed** — see
 ## Kubernetes workloads
 
 All manifests live in [k8s/](k8s/) and target namespace
-`cicd-dora-github-test`. `kubectl apply -f k8s/` applies the three workloads
-plus their services (the `.example` file is ignored — kubectl only reads
-`.yaml`/`.yml`/`.json`).
+`cicd-dora-github-test`. They contain the three workloads plus their services
+(the `.example` file is ignored — kubectl only reads `.yaml`/`.yml`/`.json`).
+
+The app image tag in the manifests is the literal `IMAGE_TAG_PLACEHOLDER`; the
+pipeline substitutes this commit's short SHA at deploy time before applying. To
+apply by hand, render the tag first, e.g.:
+
+```bash
+mkdir -p rendered
+for f in k8s/*.yaml; do
+  sed "s/IMAGE_TAG_PLACEHOLDER/<short-sha>/g" "$f" > "rendered/$(basename "$f")"
+done
+kubectl apply -f rendered/
+```
 
 | File | Object(s) |
 | --- | --- |

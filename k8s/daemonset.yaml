@@ -17,7 +17,7 @@ spec:
       containers:
         # Primary container: reports APM to the STAGING collector on port 8080.
         - name: website-staging
-          image: 125229878893.dkr.ecr.us-east-1.amazonaws.com/cicd/cicd-dora-github-test:latest
+          image: 125229878893.dkr.ecr.us-east-1.amazonaws.com/cicd/cicd-dora-github-test:IMAGE_TAG_PLACEHOLDER
           imagePullPolicy: Always
           ports:
             - name: http
@@ -49,7 +49,7 @@ spec:
         # Second container: same website image, reports APM to the DEV collector
         # on port 8081 (two containers in one pod can't share a port).
         - name: website-dev
-          image: 125229878893.dkr.ecr.us-east-1.amazonaws.com/cicd/cicd-dora-github-test:latest
+          image: 125229878893.dkr.ecr.us-east-1.amazonaws.com/cicd/cicd-dora-github-test:IMAGE_TAG_PLACEHOLDER
           imagePullPolicy: Always
           ports:
             - name: http-dev
