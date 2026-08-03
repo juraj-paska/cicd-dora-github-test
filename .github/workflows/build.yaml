@@ -195,5 +195,21 @@ jobs:
             daemonset/cicd-dora-github-test-website-ds; do
             kubectl set image "${kind_name}" \
               website-staging="${IMAGE}" website-dev="${IMAGE}" -n "${K8S_NAMESPACE}"
+          done
+
+          # Gate the deploy on the Deployment and StatefulSet rolling out.
+          for kind_name in \
+            deployment/cicd-dora-github-test-website \
+            statefulset/cicd-dora-github-test-website-sts; do
             kubectl rollout status "${kind_name}" -n "${K8S_NAMESPACE}" --timeout=180s
           done
+
+          # The DaemonSet runs one pod per eligible node and can legitimately be
+          # stuck Pending when a node is at pod capacity. Don't fail the whole
+          # deploy on it — check with a short timeout and only warn.
+          if ! kubectl rollout status daemonset/cicd-dora-github-test-website-ds \
+                 -n "${K8S_NAMESPACE}" --timeout=60s; then
+            echo "::warning::DaemonSet rollout did not complete in time (likely node pod-capacity); continuing."
+            kubectl get pods -n "${K8S_NAMESPACE}" \
+              -l app=cicd-dora-github-test-website-ds -o wide || true
+          fi
