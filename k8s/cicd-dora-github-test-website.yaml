@@ -40,6 +40,10 @@ spec:
               port: 80
             initialDelaySeconds: 5
             periodSeconds: 10
+      # Required by the cluster's Gatekeeper [podnodeselector] policy.
+      nodeSelector:
+        kubernetes.io/arch: amd64
+        kubernetes.io/os: linux
 ---
 apiVersion: v1
 kind: Service
@@ -49,7 +53,7 @@ metadata:
   labels:
     app: cicd-dora-github-test-website
 spec:
-  type: LoadBalancer
+  type: ClusterIP
   selector:
     app: cicd-dora-github-test-website
   ports:
