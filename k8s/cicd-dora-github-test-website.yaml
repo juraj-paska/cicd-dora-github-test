@@ -38,6 +38,8 @@ spec:
             # service key so deployment/statefulset/daemonset show up separately).
             - name: OTEL_SERVICE_NAME
               value: "cicd-dora-github-test-deployment"
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: "service.name=cicd-dora-github-test-deployment"
           resources:
             requests:
               cpu: 50m
@@ -66,6 +68,8 @@ spec:
               value: "apm.collector.na-01.dev-ssp.solarwinds.com"
             - name: OTEL_SERVICE_NAME
               value: "cicd-dora-github-test-deployment"
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: "service.name=cicd-dora-github-test-deployment"
           resources:
             requests:
               cpu: 50m
