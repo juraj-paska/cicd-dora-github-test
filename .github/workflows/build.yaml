@@ -1,4 +1,4 @@
-name: Build
+name: Build-cicd-dora-github-test
 
 on:
   push:
