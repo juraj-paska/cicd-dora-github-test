@@ -6,6 +6,15 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      build_image:
+        description: "Build and push a new Docker image"
+        type: boolean
+        default: true
+      deploy:
+        description: "Deploy to EKS"
+        type: boolean
+        default: true
 
 env:
   AWS_REGION: us-east-1
@@ -32,6 +41,8 @@ jobs:
     name: Build Docker Image (ECR)
     runs-on: ubuntu-latest
     needs: [prep]
+    # On push/PR always build; on manual runs only when "build_image" is checked.
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_image }}
     permissions:
       contents: read
       id-token: write   # REQUIRED for AWS OIDC
@@ -78,7 +89,14 @@ jobs:
     name: Deploy to EKS
     runs-on: ubuntu-latest
     needs: [build-image, prep]
-    if: ${{ github.event_name != 'pull_request' }}
+    # Never deploy from a PR. On manual runs only when "deploy" is checked.
+    # !cancelled() + the result check let deploy proceed when build-image was
+    # skipped (deploy-only run), but not when it actually failed.
+    if: >-
+      ${{ !cancelled()
+          && github.event_name != 'pull_request'
+          && (github.event_name != 'workflow_dispatch' || inputs.deploy)
+          && needs.build-image.result != 'failure' }}
     permissions:
       contents: read
       id-token: write
@@ -109,7 +127,12 @@ jobs:
 
       - name: Update image to commit tag
         env:
-          IMAGE: ${{ env.IMAGE_NAME }}:${{ needs.prep.outputs.short_sha }}
+          # Use the freshly-built SHA tag when build-image ran; otherwise
+          # (deploy-only run) fall back to the existing :latest image.
+          IMAGE: >-
+            ${{ needs.build-image.result == 'success'
+                && format('{0}:{1}', env.IMAGE_NAME, needs.prep.outputs.short_sha)
+                || format('{0}:latest', env.IMAGE_NAME) }}
         run: |
           echo "Deploying image: ${IMAGE}"
           # Update both website containers (staging + dev APM reporting) across
