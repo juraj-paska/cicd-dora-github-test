@@ -92,7 +92,6 @@ jobs:
           images: ${{ env.IMAGE_NAME }}
           tags: |
             type=sha
-            type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build and push (tag = short SHA)
         uses: docker/build-push-action@v6
@@ -103,7 +102,6 @@ jobs:
             RUN_NUMBER=${{ github.run_number }}
           tags: |
             ${{ env.IMAGE_NAME }}:${{ needs.prep.outputs.short_sha }}
-            ${{ env.IMAGE_NAME }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -183,12 +181,10 @@ jobs:
 
       - name: Update image to commit tag
         env:
-          # Use the freshly-built SHA tag when build-image ran; otherwise
-          # (deploy-only run) fall back to the existing :latest image.
-          IMAGE: >-
-            ${{ needs.build-image.result == 'success'
-                && format('{0}:{1}', env.IMAGE_NAME, needs.prep.outputs.short_sha)
-                || format('{0}:latest', env.IMAGE_NAME) }}
+          # Images are only ever tagged with the short SHA, so deploy the tag
+          # for this commit. On a deploy-only run (build skipped) this assumes
+          # the image for this commit was built by an earlier run.
+          IMAGE: ${{ env.IMAGE_NAME }}:${{ needs.prep.outputs.short_sha }}
         run: |
           echo "Deploying image: ${IMAGE}"
           # Update both website containers (staging + dev APM reporting) across

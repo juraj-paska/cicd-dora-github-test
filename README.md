@@ -99,8 +99,8 @@ test ─┘
 - **prep** — computes the short commit SHA used as the image tag.
 - **test** — dummy test step. Passes by default; can be forced to fail on a
   manual run (see options). A failure blocks `build-image` and `deploy`.
-- **build-image** — builds the Docker image and pushes it to ECR as both
-  `:<short-sha>` and `:latest`. Passes `RUN_NUMBER` into the image.
+- **build-image** — builds the Docker image and pushes it to ECR tagged with
+  the short commit SHA (`:<short-sha>`). Passes `RUN_NUMBER` into the image.
 - **deploy** — creates/refreshes the APM Secrets, applies the manifests, then
   rolls the new image onto all three workloads.
 
@@ -118,7 +118,7 @@ Behavior of the build/deploy toggles:
 | --- | --- | --- |
 | ✅ | ✅ | Build a new image, then deploy it. |
 | ✅ | ❌ | Build & push only, no deployment. |
-| ❌ | ✅ | Deploy the existing `:latest` image (no rebuild). |
+| ❌ | ✅ | Deploy this commit's `:<short-sha>` image (must have been built by an earlier run). |
 | ❌ | ❌ | No-op (only `prep`/`test` run). |
 
 > On push/PR the toggles don't apply — push always builds+deploys, PRs only
