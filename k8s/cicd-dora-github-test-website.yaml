@@ -6,7 +6,7 @@ metadata:
   labels:
     app: cicd-dora-github-test-website
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: cicd-dora-github-test-website
@@ -16,11 +16,24 @@ spec:
         app: cicd-dora-github-test-website
     spec:
       containers:
-        - name: nginx
+        # Primary container: reports APM to the STAGING collector on port 8080.
+        - name: website-staging
           image: 125229878893.dkr.ecr.us-east-1.amazonaws.com/cicd/cicd-dora-github-test:latest
           imagePullPolicy: Always
           ports:
-            - containerPort: 8080
+            - name: http
+              containerPort: 8080
+          env:
+            - name: PORT
+              value: "8080"
+            # SolarWinds APM: <ingestion-token>:<service-name>, from the staging Secret.
+            - name: SW_APM_SERVICE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: cicd-dora-github-test-website-apm-staging
+                  key: SW_APM_SERVICE_KEY
+            - name: SW_APM_COLLECTOR
+              value: "apm.collector.na-01.st-ssp.solarwinds.com"
           resources:
             requests:
               cpu: 50m
@@ -28,18 +41,55 @@ spec:
             limits:
               cpu: 100m
               memory: 128Mi
-          readinessProbe:
-            httpGet:
-              path: /health
-              port: 8080
-            initialDelaySeconds: 2
-            periodSeconds: 5
-          livenessProbe:
-            httpGet:
-              path: /health
-              port: 8080
-            initialDelaySeconds: 5
-            periodSeconds: 10
+        # Second container: same website image, reports APM to the DEV collector
+        # on port 8081 (two containers in one pod can't share a port).
+        - name: website-dev
+          image: 125229878893.dkr.ecr.us-east-1.amazonaws.com/cicd/cicd-dora-github-test:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http-dev
+              containerPort: 8081
+          env:
+            - name: PORT
+              value: "8081"
+            - name: SW_APM_SERVICE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: cicd-dora-github-test-website-apm-dev
+                  key: SW_APM_SERVICE_KEY
+            # Dev collector.
+            - name: SW_APM_COLLECTOR
+              value: "apm.collector.na-01.dev-ssp.solarwinds.com"
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+        - name: traffic-generator
+          image: curlimages/curl:8.11.1
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - |
+              while true; do
+                curl -sS -o /dev/null -w "traffic-generator: GET / -> %{http_code}\n" http://localhost:8080/ || true
+                curl -sS -o /dev/null -w "traffic-generator: GET / -> %{http_code}\n" http://localhost:8081/ || true
+                sleep 60
+              done
+          resources:
+            requests:
+              cpu: "10m"
+              memory: "16Mi"
+            limits:
+              cpu: "50m"
+              memory: "32Mi"
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 1000
       # Required by the cluster's Gatekeeper [podnodeselector] policy.
       nodeSelector:
         kubernetes.io/arch: amd64

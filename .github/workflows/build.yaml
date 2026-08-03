@@ -112,5 +112,7 @@ jobs:
           IMAGE: ${{ env.IMAGE_NAME }}:${{ needs.prep.outputs.short_sha }}
         run: |
           echo "Deploying image: ${IMAGE}"
-          kubectl set image deployment/cicd-dora-github-test-website nginx="${IMAGE}" -n "${K8S_NAMESPACE}"
+          # Both containers run the same image (staging + dev APM reporting).
+          kubectl set image deployment/cicd-dora-github-test-website \
+            website-staging="${IMAGE}" website-dev="${IMAGE}" -n "${K8S_NAMESPACE}"
           kubectl rollout status deployment/cicd-dora-github-test-website -n "${K8S_NAMESPACE}" --timeout=180s
