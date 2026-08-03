@@ -4,9 +4,18 @@ Serves a single page on / and a health check on /health.
 Run in production via gunicorn (see Dockerfile); `python app.py`
 starts the Flask dev server for local use.
 """
+import os
+
 from flask import Flask
 
 app = Flask(__name__)
+
+# Pipeline run number, baked into the image at build time (see Dockerfile /
+# build.yaml). Empty for local runs; appended to the heading when present.
+RUN_NUMBER = os.environ.get("RUN_NUMBER", "").strip()
+HEADING = "Hello from cicd-dora-github-test"
+if RUN_NUMBER:
+    HEADING = f"{HEADING} {RUN_NUMBER}"
 
 PAGE = """<!DOCTYPE html>
 <html lang="en">
@@ -31,10 +40,12 @@ PAGE = """<!DOCTYPE html>
   </style>
 </head>
 <body>
-  <h1>Hello from cicd-dora-github-test</h1>
+  <h1>__HEADING__</h1>
 </body>
 </html>
 """
+
+PAGE = PAGE.replace("__HEADING__", HEADING)
 
 
 @app.route("/")

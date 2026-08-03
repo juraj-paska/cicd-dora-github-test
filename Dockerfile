@@ -10,6 +10,11 @@ RUN pip install --no-cache-dir -r requirements.txt \
 # Copy application code
 COPY app.py .
 
+# Pipeline run number, passed in at build time and exposed to the app at
+# runtime (rendered into the page heading). Empty for plain local builds.
+ARG RUN_NUMBER=""
+ENV RUN_NUMBER=$RUN_NUMBER
+
 # Run as a non-root user
 RUN useradd --create-home --uid 1000 appuser
 USER appuser

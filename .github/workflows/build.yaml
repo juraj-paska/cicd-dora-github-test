@@ -79,6 +79,8 @@ jobs:
         with:
           context: .
           push: ${{ github.event_name != 'pull_request' }}
+          build-args: |
+            RUN_NUMBER=${{ github.run_number }}
           tags: |
             ${{ env.IMAGE_NAME }}:${{ needs.prep.outputs.short_sha }}
             ${{ env.IMAGE_NAME }}:latest
