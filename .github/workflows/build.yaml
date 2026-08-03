@@ -15,6 +15,10 @@ on:
         description: "Deploy to EKS"
         type: boolean
         default: true
+      fail_tests:
+        description: "Force the test step to fail"
+        type: boolean
+        default: false
 
 env:
   AWS_REGION: us-east-1
@@ -37,10 +41,26 @@ jobs:
         run: |
           echo "short_sha=${GITHUB_SHA::8}" >> "$GITHUB_OUTPUT"
 
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      # Dummy test step: passes by default. On a manual run you can tick
+      # "fail_tests" to make it fail (and thus block build/deploy).
+      - name: Run tests
+        env:
+          FAIL_TESTS: ${{ github.event_name == 'workflow_dispatch' && inputs.fail_tests }}
+        run: |
+          if [ "${FAIL_TESTS}" = "true" ]; then
+            echo "::error::Tests failed (fail_tests was set for this manual run)."
+            exit 1
+          fi
+          echo "All tests passed."
+
   build-image:
     name: Build Docker Image (ECR)
     runs-on: ubuntu-latest
-    needs: [prep]
+    needs: [prep, test]
     # On push/PR always build; on manual runs only when "build_image" is checked.
     if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_image }}
     permissions:
@@ -90,14 +110,15 @@ jobs:
   deploy:
     name: Deploy to EKS
     runs-on: ubuntu-latest
-    needs: [build-image, prep]
+    needs: [build-image, prep, test]
     # Never deploy from a PR. On manual runs only when "deploy" is checked.
-    # !cancelled() + the result check let deploy proceed when build-image was
-    # skipped (deploy-only run), but not when it actually failed.
+    # !cancelled() + the result checks let deploy proceed when build-image was
+    # skipped (deploy-only run), but not when tests or the build actually failed.
     if: >-
       ${{ !cancelled()
           && github.event_name != 'pull_request'
           && (github.event_name != 'workflow_dispatch' || inputs.deploy)
+          && needs.test.result == 'success'
           && needs.build-image.result != 'failure' }}
     permissions:
       contents: read
