@@ -1,0 +1,116 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  AWS_REGION: us-east-1
+  AWS_ACCOUNT_ID: '125229878893'
+  ECR_REPOSITORY: cicd/cicd-dora-github-test
+  ECR_REGISTRY: 125229878893.dkr.ecr.us-east-1.amazonaws.com
+  IMAGE_NAME: 125229878893.dkr.ecr.us-east-1.amazonaws.com/cicd/cicd-dora-github-test
+  EKS_CLUSTER_NAME: e2e-cluster
+  K8S_NAMESPACE: cicd-dora-github-test
+
+jobs:
+  prep:
+    name: Prep (compute version)
+    runs-on: ubuntu-latest
+    outputs:
+      short_sha: ${{ steps.vars.outputs.short_sha }}
+    steps:
+      - name: Compute short SHA
+        id: vars
+        run: |
+          echo "short_sha=${GITHUB_SHA::8}" >> "$GITHUB_OUTPUT"
+
+  build-image:
+    name: Build Docker Image (ECR)
+    runs-on: ubuntu-latest
+    needs: [prep]
+    permissions:
+      contents: read
+      id-token: write   # REQUIRED for AWS OIDC
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Configure AWS credentials via OIDC (assume the ECR push role)
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::125229878893:role/GitHubActionsECRPush-cicd-dora-github-test
+          aws-region: ${{ env.AWS_REGION }}
+
+      # Login to ECR (uses the short-lived credentials from the step above)
+      - name: Login to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push (tag = short SHA)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: |
+            ${{ env.IMAGE_NAME }}:${{ needs.prep.outputs.short_sha }}
+            ${{ env.IMAGE_NAME }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: Deploy to EKS
+    runs-on: ubuntu-latest
+    needs: [build-image, prep]
+    if: ${{ github.event_name != 'pull_request' }}
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::125229878893:role/GitHubActionsECRPush-cicd-dora-github-test
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: v1.29.0
+
+      - name: Configure kubeconfig for EKS
+        run: |
+          aws eks update-kubeconfig \
+            --name "${EKS_CLUSTER_NAME}" \
+            --region "${AWS_REGION}"
+
+      - name: Apply manifest
+        run: |
+          kubectl apply -f k8s/
+
+      - name: Update image to commit tag
+        env:
+          IMAGE: ${{ env.IMAGE_NAME }}:${{ needs.prep.outputs.short_sha }}
+        run: |
+          echo "Deploying image: ${IMAGE}"
+          kubectl set image deployment/cicd-dora-github-test-website nginx="${IMAGE}" -n "${K8S_NAMESPACE}"
+          kubectl rollout status deployment/cicd-dora-github-test-website -n "${K8S_NAMESPACE}" --timeout=180s

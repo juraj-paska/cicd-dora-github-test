@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cicd-dora-github-test-website
+  namespace: cicd-dora-github-test
+  labels:
+    app: cicd-dora-github-test-website
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: cicd-dora-github-test-website
+  template:
+    metadata:
+      labels:
+        app: cicd-dora-github-test-website
+    spec:
+      containers:
+        - name: nginx
+          image: 125229878893.dkr.ecr.us-east-1.amazonaws.com/cicd/cicd-dora-github-test:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cicd-dora-github-test-website
+  namespace: cicd-dora-github-test
+  labels:
+    app: cicd-dora-github-test-website
+spec:
+  type: LoadBalancer
+  selector:
+    app: cicd-dora-github-test-website
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
