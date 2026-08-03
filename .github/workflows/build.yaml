@@ -121,6 +121,39 @@ jobs:
             --name "${EKS_CLUSTER_NAME}" \
             --region "${AWS_REGION}"
 
+      # Create/refresh the APM Secrets from encrypted GitHub Actions secrets.
+      # The token material never lives in git — only these repo secrets:
+      #   SWO_STAGING_INGESTION_TOKEN, SWO_DEV_INGESTION_TOKEN
+      - name: Create/refresh APM Secrets
+        env:
+          STAGING_TOKEN: ${{ secrets.SWO_STAGING_INGESTION_TOKEN }}
+          DEV_TOKEN: ${{ secrets.SWO_DEV_INGESTION_TOKEN }}
+          # Fallback service name inside the key; each workload overrides it
+          # per-pod via OTEL_SERVICE_NAME.
+          SERVICE_NAME: cicd-dora-github-test
+        run: |
+          if [ -z "${STAGING_TOKEN}" ] || [ -z "${DEV_TOKEN}" ]; then
+            echo "::error::Repository secrets SWO_STAGING_INGESTION_TOKEN and SWO_DEV_INGESTION_TOKEN must be set."
+            exit 1
+          fi
+          # Namespace must exist before creating namespaced Secrets.
+          kubectl apply -f k8s/00-namespace.yaml
+          # Idempotent create-or-update (dry-run|apply avoids "already exists").
+          kubectl create secret generic cicd-dora-github-test-website-apm-staging \
+            -n "${K8S_NAMESPACE}" \
+            --from-literal=SW_APM_SERVICE_KEY="${STAGING_TOKEN}:${SERVICE_NAME}" \
+            --dry-run=client -o yaml \
+            | kubectl label --local -f - --dry-run=client -o yaml \
+                app=cicd-dora-github-test-website env=staging \
+            | kubectl apply -f -
+          kubectl create secret generic cicd-dora-github-test-website-apm-dev \
+            -n "${K8S_NAMESPACE}" \
+            --from-literal=SW_APM_SERVICE_KEY="${DEV_TOKEN}:${SERVICE_NAME}" \
+            --dry-run=client -o yaml \
+            | kubectl label --local -f - --dry-run=client -o yaml \
+                app=cicd-dora-github-test-website env=dev \
+            | kubectl apply -f -
+
       - name: Apply manifest
         run: |
           kubectl apply -f k8s/
