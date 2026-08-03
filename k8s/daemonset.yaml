@@ -33,6 +33,10 @@ spec:
                   key: SW_APM_SERVICE_KEY
             - name: SW_APM_COLLECTOR
               value: "apm.collector.na-01.st-ssp.solarwinds.com"
+            # Distinct APM service name per workload (overrides the name in the
+            # service key so deployment/statefulset/daemonset show up separately).
+            - name: OTEL_SERVICE_NAME
+              value: "cicd-dora-github-test-daemonset"
           resources:
             requests:
               cpu: 50m
@@ -59,6 +63,8 @@ spec:
             # Dev collector.
             - name: SW_APM_COLLECTOR
               value: "apm.collector.na-01.dev-ssp.solarwinds.com"
+            - name: OTEL_SERVICE_NAME
+              value: "cicd-dora-github-test-daemonset"
           resources:
             requests:
               cpu: 50m
