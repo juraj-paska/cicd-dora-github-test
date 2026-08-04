@@ -6,6 +6,12 @@ metadata:
   labels:
     app: cicd-dora-github-test-website-ds
 spec:
+  # Update every node's pod at once: allow all DaemonSet pods to be
+  # unavailable simultaneously (maxUnavailable 100%) rather than one-by-one.
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 100%
   selector:
     matchLabels:
       app: cicd-dora-github-test-website-ds
