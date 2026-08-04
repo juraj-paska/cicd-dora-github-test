@@ -62,13 +62,13 @@ All manifests live in [k8s/](k8s/) and target namespace
 (the `.example` file is ignored — kubectl only reads `.yaml`/`.yml`/`.json`).
 
 The app image tag in the manifests is the literal `IMAGE_TAG_PLACEHOLDER`; the
-pipeline substitutes this commit's short SHA at deploy time before applying. To
-apply by hand, render the tag first, e.g.:
+pipeline substitutes this build's tag (`<short-sha>-<run-number>`) at deploy
+time before applying. To apply by hand, render the tag first, e.g.:
 
 ```bash
 mkdir -p rendered
 for f in k8s/*.yaml; do
-  sed "s/IMAGE_TAG_PLACEHOLDER/<short-sha>/g" "$f" > "rendered/$(basename "$f")"
+  sed "s/IMAGE_TAG_PLACEHOLDER/<short-sha>-<run-number>/g" "$f" > "rendered/$(basename "$f")"
 done
 kubectl apply -f rendered/
 ```
@@ -107,11 +107,12 @@ prep ─┐
 test ─┘
 ```
 
-- **prep** — computes the short commit SHA used as the image tag.
+- **prep** — computes the image tag `<short-sha>-<run-number>` (unique per
+  build, so every run produces a distinct, traceable tag).
 - **test** — dummy test step. Passes by default; can be forced to fail on a
   manual run (see options). A failure blocks `build-image` and `deploy`.
 - **build-image** — builds the Docker image and pushes it to ECR tagged with
-  the short commit SHA (`:<short-sha>`). Passes `RUN_NUMBER` into the image.
+  `:<short-sha>-<run-number>`. Passes `RUN_NUMBER` into the image.
 - **deploy** — creates/refreshes the APM Secrets, applies the manifests, then
   rolls the new image onto all three workloads.
 
@@ -129,7 +130,7 @@ Behavior of the build/deploy toggles:
 | --- | --- | --- |
 | ✅ | ✅ | Build a new image, then deploy it. |
 | ✅ | ❌ | Build & push only, no deployment. |
-| ❌ | ✅ | Deploy this commit's `:<short-sha>` image (must have been built by an earlier run). |
+| ❌ | ✅ | Deploy this build's `:<short-sha>-<run-number>` image (must have been built by an earlier run). |
 | ❌ | ❌ | No-op (only `prep`/`test` run). |
 
 > On push/PR the toggles don't apply — push always builds+deploys, PRs only
